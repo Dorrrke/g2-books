@@ -13,6 +13,8 @@ require (
 	github.com/jackc/pgx/v5 v5.6.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/lib/pq v1.10.9 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/rs/zerolog v1.33.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	golang.org/x/sync v0.5.0 // indirect
 )
