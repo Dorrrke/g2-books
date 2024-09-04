@@ -11,5 +11,6 @@ CREATE TABLE IF NOT EXISTS books(
     bid VARCHAR(36) PRIMARY KEY,
     lable TEXT NOT NULL,
     author TEXT NOT NULL,
+    delete BOOLEAN NOT NULL DEFAULT false,
     uid VARCHAR(36) NOT NULL
 );

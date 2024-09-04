@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Dorrrke/g2-books/internal/domain/models"
+	"github.com/Dorrrke/g2-books/internal/logger"
 	"github.com/Dorrrke/g2-books/internal/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
@@ -26,24 +28,36 @@ type Storage interface {
 	ValidateUser(models.User) (string, string, error)
 	GetBooks() ([]models.Book, error)
 	GetBookById(string) (models.Book, error)
+	GetBookByUID(string) ([]models.Book, error)
 	SaveBook(models.Book) error
 	DeleteBook(string) error
+	DeleteBooks() error
 }
 
 type Server struct {
-	host    string
-	storage Storage
+	serve      *http.Server
+	storage    Storage
+	deleteChan chan int
+	ErrChan    chan error
 }
 
 func New(host string, storage Storage) *Server {
+	serve := http.Server{
+		Addr: host,
+	}
+	dChan := make(chan int, 5)
+	errChan := make(chan error)
 	return &Server{
-		host:    host,
-		storage: storage,
+		serve:      &serve,
+		storage:    storage,
+		deleteChan: dChan,
+		ErrChan:    errChan,
 	}
 }
 
-func (s *Server) Run() error {
-	r := gin.Default()
+func (s *Server) Run(ctx context.Context) error {
+	go s.deleter(ctx)
+	r := gin.New()
 	userGroup := r.Group("/user")
 	{
 		userGroup.POST("/register", s.RegisterHandler)
@@ -51,12 +65,14 @@ func (s *Server) Run() error {
 	}
 	bookGroup := r.Group("/books")
 	{
+		bookGroup.GET("/my-books", s.BooksByUser)
 		bookGroup.GET("/all-books", s.AllBookHandler)
 		bookGroup.GET("/:id", s.GetBookByIdHandler)
 		bookGroup.POST("/add-book", s.SaveBookHandler)
 		bookGroup.DELETE("/delete/:id", s.DeleteBookHandler)
 	}
-	if err := r.Run(s.host); err != nil {
+	s.serve.Handler = r
+	if err := s.serve.ListenAndServe(); err != nil {
 		return err
 	}
 	return nil
@@ -144,12 +160,40 @@ func (s *Server) GetBookByIdHandler(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, book)
 }
 
+func (s *Server) BooksByUser(ctx *gin.Context) {
+	log := logger.Get()
+	token := ctx.GetHeader("Authorization")
+	uid, err := getUID(token)
+	if err != nil {
+		log.Error().Err(err).Msg("get UID failed")
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+	books, err := s.storage.GetBookByUID(uid)
+	if err != nil {
+		if errors.Is(err, storage.ErrBooksListEmpty) {
+			ctx.String(http.StatusNoContent, err.Error())
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, books)
+}
+
 func (s *Server) SaveBookHandler(ctx *gin.Context) {
 	var book models.Book
 	if err := ctx.ShouldBindBodyWithJSON(&book); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	token := ctx.GetHeader("Authorization")
+	uid, err := getUID(token)
+	if err != nil {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+	book.UID = uid
 	if err := s.storage.SaveBook(book); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -167,7 +211,43 @@ func (s *Server) DeleteBookHandler(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	s.deleteChan <- 1
 	ctx.String(http.StatusOK, "book was deleted")
+}
+
+func (s *Server) ShutdownServer(ctx context.Context) error {
+	log := logger.Get()
+	defer log.Debug().Msg("server shutdowner - end")
+	close(s.ErrChan)
+	if err := s.serve.Shutdown(ctx); err != nil {
+		log.Error().Err(err).Msg("server shutdown failed")
+		return err
+	}
+	return nil
+}
+
+func (s *Server) deleter(ctx context.Context) {
+	log := logger.Get()
+	defer log.Debug().Msg("deleter end")
+	for {
+		select {
+		case <-ctx.Done():
+			log.Debug().Msg("deleter: ctx done")
+			return
+		default:
+			if len(s.deleteChan) == 5 {
+				log.Debug().Int("delete count", len(s.deleteChan)).Msg("start deleting")
+				for i := 0; i < 5; i++ {
+					<-s.deleteChan
+				}
+				if err := s.storage.DeleteBooks(); err != nil {
+					log.Error().Err(err).Msg("deleting books failed")
+					s.ErrChan <- err
+					return
+				}
+			}
+		}
+	}
 }
 
 func createJWT(UID string) (string, error) {
@@ -186,7 +266,7 @@ func createJWT(UID string) (string, error) {
 }
 
 func getUID(tokenStr string) (string, error) {
-	claims := Claims{}
+	claims := &Claims{}
 
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
 		return []byte(SecretKey), nil

@@ -28,7 +28,7 @@ func Get(flags ...bool) zerolog.Logger {
 			return file + ":" + strconv.Itoa(line)
 		}
 		if flags[0] {
-			log = zerolog.New(os.Stdout).Level(zerolog.DebugLevel).With().Timestamp().Caller().Logger()
+			log = zerolog.New(os.Stdout).Level(zerolog.DebugLevel).With().Timestamp().Caller().Logger().Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 		} else {
 			log = zerolog.New(os.Stdout).Level(zerolog.InfoLevel).With().Timestamp().Caller().Logger()

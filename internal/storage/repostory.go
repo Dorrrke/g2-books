@@ -7,7 +7,9 @@ import (
 	"log"
 	"time"
 
+	errText "github.com/Dorrrke/g2-books/internal/domain/errors"
 	"github.com/Dorrrke/g2-books/internal/domain/models"
+	"github.com/Dorrrke/g2-books/internal/logger"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -17,6 +19,8 @@ import (
 )
 
 const ctxTimeout = 2 * time.Second
+
+var ErrBookDeleted = errors.New(errText.BookWasDeletedError)
 
 type Repository struct {
 	conn *pgxpool.Pool
@@ -59,14 +63,35 @@ func (r *Repository) ValidateUser(user models.User) (string, string, error) {
 func (r *Repository) GetBooks() ([]models.Book, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
 	defer cancel()
-	rows, err := r.conn.Query(ctx, "SELECT * FROM books")
+	rows, err := r.conn.Query(ctx, "SELECT * FROM books WHERE delete = false")
 	if err != nil {
 		return nil, err
 	}
 	var books []models.Book
 	for rows.Next() {
 		var book models.Book
-		if err := rows.Scan(&book.BID, &book.Lable, &book.Author, &book.UID); err != nil {
+		if err := rows.Scan(&book.BID, &book.Lable, &book.Author, &book.Delete, &book.UID); err != nil {
+			return nil, err
+		}
+		books = append(books, book)
+	}
+	if len(books) == 0 {
+		return nil, fmt.Errorf("no books in db")
+	}
+	return books, nil
+}
+
+func (r *Repository) GetBookByUID(uid string) ([]models.Book, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
+	defer cancel()
+	rows, err := r.conn.Query(ctx, "SELECT * FROM books WHERE delete = false AND uid = $1", uid)
+	if err != nil {
+		return nil, err
+	}
+	var books []models.Book
+	for rows.Next() {
+		var book models.Book
+		if err := rows.Scan(&book.BID, &book.Lable, &book.Author, &book.Delete, &book.UID); err != nil {
 			return nil, err
 		}
 		books = append(books, book)
@@ -80,13 +105,16 @@ func (r *Repository) GetBooks() ([]models.Book, error) {
 func (r *Repository) GetBookById(bID string) (models.Book, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
 	defer cancel()
-	row := r.conn.QueryRow(ctx, "SELECT lable, author FROM books WHERE bid = $1", bID)
+	row := r.conn.QueryRow(ctx, "SELECT lable, author, delete FROM books WHERE bid = $1", bID)
 	var book models.Book
-	if err := row.Scan(&book.Lable, &book.Author); err != nil {
+	if err := row.Scan(&book.Lable, &book.Author, &book.Delete); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Book{}, fmt.Errorf("book with id = %s, does not exist", bID)
 		}
 		return models.Book{}, err
+	}
+	if book.Delete {
+		return models.Book{}, ErrBookDeleted
 	}
 	return book, nil
 }
@@ -111,13 +139,25 @@ func (r *Repository) DeleteBook(bID string) error {
 	}
 	defer tx.Rollback(ctx)
 
-	if _, err := tx.Prepare(ctx, "delete book", "DELETE FROM books WHERE bid = $1"); err != nil {
+	if _, err := tx.Prepare(ctx, "update book", "UPDATE books SET delete = true WHERE bid = $1"); err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, "delete book", bID); err != nil {
+	if _, err = tx.Exec(ctx, "update book", bID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func (r *Repository) DeleteBooks() error {
+	log := logger.Get()
+	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
+	defer cancel()
+	_, err := r.conn.Exec(ctx, "DELETE FROM books WHERE delete = true")
+	if err != nil {
+		log.Error().Err(err).Msg("delete books row failed")
+		return err
+	}
+	return nil
 }
 
 func Migrations(dbAddr, migrationPath string) error {

@@ -11,5 +11,6 @@ type Book struct {
 	BID    string `json:"b_id"`
 	Lable  string `json:"lable" validate:"required"`
 	Author string `json:"author" validate:"required"`
+	Delete bool   `json:"delete"`
 	UID    string `json:"uid" validate:"required"`
 }
