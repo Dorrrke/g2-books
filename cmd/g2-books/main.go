@@ -9,10 +9,13 @@ import (
 	"syscall"
 
 	"github.com/Dorrrke/g2-books/internal/config"
+	authservicev1 "github.com/Dorrrke/g2-books/internal/go"
 	"github.com/Dorrrke/g2-books/internal/logger"
 	"github.com/Dorrrke/g2-books/internal/server"
 	"github.com/Dorrrke/g2-books/internal/storage"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
@@ -35,8 +38,16 @@ func main() {
 	if err = storage.Migrations(cfg.DbDsn, cfg.MigratePath); err != nil {
 		log.Fatal().Err(err).Msg("migrations failed")
 	}
+	// grpc.Dial("localhost:5050", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(cfg.AuthAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatal().Err(err).Msg("creation grpc connection failed")
+	}
+	defer conn.Close()
 
-	server := server.New(cfg.Host, stor)
+	authClien := authservicev1.NewAuthServiceClient(conn)
+
+	server := server.New(cfg.Host, stor, authClien)
 
 	group, gCtx := errgroup.WithContext(ctx)
 

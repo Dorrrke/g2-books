@@ -6,14 +6,15 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/Dorrrke/g2-books/internal/domain/models"
+	authservicev1 "github.com/Dorrrke/g2-books/internal/go"
 	"github.com/Dorrrke/g2-books/internal/logger"
 	"github.com/Dorrrke/g2-books/internal/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
-	"golang.org/x/crypto/bcrypt"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const SecretKey = "VerySecretKey2000"
@@ -38,10 +39,11 @@ type Server struct {
 	serve      *http.Server
 	storage    Storage
 	deleteChan chan int
+	authClient authservicev1.AuthServiceClient
 	ErrChan    chan error
 }
 
-func New(host string, storage Storage) *Server {
+func New(host string, storage Storage, authClien authservicev1.AuthServiceClient) *Server {
 	serve := http.Server{
 		Addr: host,
 	}
@@ -52,12 +54,13 @@ func New(host string, storage Storage) *Server {
 		storage:    storage,
 		deleteChan: dChan,
 		ErrChan:    errChan,
+		authClient: authClien,
 	}
 }
 
 func (s *Server) Run(ctx context.Context) error {
 	go s.deleter(ctx)
-	r := gin.New()
+	r := gin.Default()
 	userGroup := r.Group("/user")
 	{
 		userGroup.POST("/register", s.RegisterHandler)
@@ -79,57 +82,58 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 func (s *Server) RegisterHandler(ctx *gin.Context) {
+	log := logger.Get()
 	var user models.User
 	if err := ctx.ShouldBindBodyWithJSON(&user); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	passHash, err := bcrypt.GenerateFromPassword([]byte(user.Pass), bcrypt.DefaultCost)
+	req, err := s.authClient.Register(context.TODO(), &authservicev1.User{
+		Name:  user.Name,
+		Email: user.Email,
+		Pass:  user.Pass,
+	})
 	if err != nil {
+		if status.Code(err) == codes.Aborted {
+			log.Error().Err(err).Msg("register request failed; user alredy exist")
+			ctx.JSON(http.StatusConflict, gin.H{"error": "user with this e-mail address is already registered"})
+			return
+		}
+		log.Error().Err(err).Msg("user register request failed")
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	user.Pass = string(passHash)
-	UID, err := s.storage.SaveUser(user)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	token, err := createJWT(UID)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	ctx.Header("Authorization", token)
-	ctx.String(http.StatusOK, "User was saved")
+	log.Debug().Str("token", req.Token).Str("msg", req.Message).Msg("grpc register request")
+	ctx.Header("Authorization", req.Token)
+	ctx.String(http.StatusOK, req.Message)
 }
 
 func (s *Server) AuthHandler(ctx *gin.Context) {
+	log := logger.Get()
 	var user models.User
 	if err := ctx.ShouldBindBodyWithJSON(&user); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	UID, pass, err := s.storage.ValidateUser(user)
+	req, err := s.authClient.Login(context.TODO(), &authservicev1.UserCreds{
+		Email: user.Email,
+		Pass:  user.Pass,
+	})
 	if err != nil {
-		if errors.Is(err, storage.ErrInvalidAuthData) {
-			ctx.String(http.StatusUnauthorized, err.Error())
-			return
+		if status.Code(err) == codes.NotFound {
+			log.Error().Err(err).Msg("request failed; user not found")
+			ctx.String(http.StatusUnauthorized, "user not found")
+		} else if status.Code(err) == codes.Unauthenticated {
+			log.Error().Err(err).Msg("request failed; incorrect password")
+			ctx.String(http.StatusUnauthorized, "incorrect password")
 		}
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Error().Err(err).Msg("user login request failed")
+		ctx.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	if err = bcrypt.CompareHashAndPassword([]byte(pass), []byte(user.Pass)); err != nil {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid password"})
-		return
-	}
-	token, err := createJWT(UID)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	ctx.Header("Authorization", token)
-	ctx.String(http.StatusOK, "Auth completed")
+	log.Debug().Str("token", req.Token).Str("msg", req.Message).Msg("grpc login request")
+	ctx.Header("Authorization", req.Token)
+	ctx.String(http.StatusOK, req.Message)
 }
 
 func (s *Server) AllBookHandler(ctx *gin.Context) {
@@ -248,21 +252,6 @@ func (s *Server) deleter(ctx context.Context) {
 			}
 		}
 	}
-}
-
-func createJWT(UID string) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 3)),
-		},
-		UserID: UID,
-	})
-	key := []byte(SecretKey)
-	tokenStr, err := token.SignedString(key)
-	if err != nil {
-		return "", err
-	}
-	return tokenStr, nil
 }
 
 func getUID(tokenStr string) (string, error) {

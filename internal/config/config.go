@@ -1,6 +1,7 @@
 package config
 
 import (
+	"cmp"
 	"flag"
 	"log"
 	"os"
@@ -10,6 +11,7 @@ type Config struct {
 	Host        string
 	DbDsn       string
 	MigratePath string
+	AuthAddr    string
 	Debug       bool
 }
 
@@ -17,6 +19,7 @@ const (
 	defaultDbDSN       = "postgres://postgres:6406655@localhost:5432/cource_g2?sslmode=disable"
 	defaultMigratePath = "migrations"
 	defaultHost        = ":8080"
+	defaultAuthAddr    = "localhost:8081"
 )
 
 func ReadConfig() Config {
@@ -42,10 +45,12 @@ func ReadConfig() Config {
 	if migratePathEnv != "" && migratePath == defaultMigratePath {
 		migratePath = migratePathEnv
 	}
+	authAddr := cmp.Or(os.Getenv("AUTH_ADDR"), defaultAuthAddr)
 	return Config{
 		Host:        host,
 		DbDsn:       dbDsn,
 		MigratePath: migratePath,
+		AuthAddr:    authAddr,
 		Debug:       *debug,
 	}
 }

@@ -343,7 +343,7 @@ func TestDeleter(t *testing.T) {
 			m := mocks.NewMockStorage(ctrl)
 			defer ctrl.Finish()
 			m.EXPECT().DeleteBooks().Return(tc.want.err)
-			srv := New("0.0.0.0:8080", m)
+			srv := New("0.0.0.0:8080", m, nil)
 			for i := 0; i < 5; i++ {
 				srv.deleteChan <- i
 			}
