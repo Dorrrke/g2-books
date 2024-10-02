@@ -2,15 +2,15 @@ package models
 
 type User struct {
 	UID   string `json:"uid"`
-	Name  string `json:"name" validate:"required"`
+	Name  string `json:"name"  validate:"required"`
 	Email string `json:"email" validate:"required, email"`
-	Pass  string `json:"pass" validate:"required"`
+	Pass  string `json:"pass"  validate:"required"`
 }
 
 type Book struct {
 	BID    string `json:"b_id"`
-	Lable  string `json:"lable" validate:"required"`
+	Lable  string `json:"lable"  validate:"required"`
 	Author string `json:"author" validate:"required"`
 	Delete bool   `json:"delete"`
-	UID    string `json:"uid" validate:"required"`
+	UID    string `json:"uid"    validate:"required"`
 }

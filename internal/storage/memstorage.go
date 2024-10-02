@@ -41,7 +41,7 @@ func (ms *MemStorage) ValidateUser(user models.User) (string, error) {
 }
 
 func (ms *MemStorage) GetBooks() ([]models.Book, error) {
-	var books []models.Book
+	books := []models.Book{}
 	for bid, value := range ms.booksMap {
 		book := value
 		book.BID = bid
@@ -53,12 +53,12 @@ func (ms *MemStorage) GetBooks() ([]models.Book, error) {
 	return books, nil
 }
 
-func (ms *MemStorage) GetBookById(bId string) (models.Book, error) {
-	log.Printf("BID: %s\n", bId)
+func (ms *MemStorage) GetBookByID(bID string) (models.Book, error) {
+	log.Printf("BID: %s\n", bID)
 	for _, val := range ms.booksMap {
 		log.Println(val.Lable, val.BID)
 	}
-	book, ok := ms.booksMap[bId]
+	book, ok := ms.booksMap[bID]
 	if !ok {
 		return models.Book{}, ErrBookNotFound
 	}
@@ -66,16 +66,16 @@ func (ms *MemStorage) GetBookById(bId string) (models.Book, error) {
 }
 
 func (ms *MemStorage) SaveBook(book models.Book) error {
-	bId := uuid.New().String()
-	ms.booksMap[bId] = book
+	bID := uuid.New().String()
+	ms.booksMap[bID] = book
 	return nil
 }
 
-func (ms *MemStorage) DeleteBook(bId string) error {
-	_, ok := ms.booksMap[bId]
+func (ms *MemStorage) DeleteBook(bID string) error {
+	_, ok := ms.booksMap[bID]
 	if !ok {
 		return ErrBookNotFound
 	}
-	delete(ms.booksMap, bId)
+	delete(ms.booksMap, bID)
 	return nil
 }

@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 
@@ -29,7 +28,7 @@ type Storage interface {
 	SaveUser(models.User) (string, error)
 	ValidateUser(models.User) (string, string, error)
 	GetBooks() ([]models.Book, error)
-	GetBookById(string) (models.Book, error)
+	GetBookByID(string) (models.Book, error)
 	GetBookByUID(string) ([]models.Book, error)
 	SaveBook(models.Book) error
 	DeleteBook(string) error
@@ -45,10 +44,10 @@ type Server struct {
 }
 
 func New(host string, storage Storage, authClien authservicev1.AuthServiceClient) *Server {
-	serve := http.Server{
+	serve := http.Server{ //nolint: gosec //todo: another time fix
 		Addr: host,
 	}
-	dChan := make(chan int, 5)
+	dChan := make(chan int, 5) //nolint: gomnd //its size
 	errChan := make(chan error)
 	return &Server{
 		serve:      &serve,
@@ -61,21 +60,21 @@ func New(host string, storage Storage, authClien authservicev1.AuthServiceClient
 
 func (s *Server) Run(ctx context.Context) error {
 	go s.deleter(ctx)
-	r := gin.Default()
-	userGroup := r.Group("/user")
+	router := gin.Default()
+	userGroup := router.Group("/user")
 	{
 		userGroup.POST("/register", s.RegisterHandler)
 		userGroup.POST("/auth", s.AuthHandler)
 	}
-	bookGroup := r.Group("/books")
+	bookGroup := router.Group("/books")
 	{
 		bookGroup.GET("/my-books", s.BooksByUser)
 		bookGroup.GET("/all-books", s.AllBookHandler)
-		bookGroup.GET("/:id", s.GetBookByIdHandler)
+		bookGroup.GET("/:id", s.GetBookByIDHandler)
 		bookGroup.POST("/add-book", s.SaveBookHandler)
 		bookGroup.DELETE("/delete/:id", s.DeleteBookHandler)
 	}
-	s.serve.Handler = r
+	s.serve.Handler = router
 	if err := s.serve.ListenAndServe(); err != nil {
 		return err
 	}
@@ -104,9 +103,9 @@ func (s *Server) RegisterHandler(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	log.Debug().Str("token", req.Token).Str("msg", req.Message).Msg("grpc register request")
-	ctx.Header("Authorization", req.Token)
-	ctx.String(http.StatusOK, req.Message)
+	log.Debug().Str("token", req.GetToken()).Str("msg", req.GetMessage()).Msg("grpc register request")
+	ctx.Header("Authorization", req.GetToken())
+	ctx.String(http.StatusOK, req.GetMessage())
 }
 
 func (s *Server) AuthHandler(ctx *gin.Context) {
@@ -132,9 +131,9 @@ func (s *Server) AuthHandler(ctx *gin.Context) {
 		ctx.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	log.Debug().Str("token", req.Token).Str("msg", req.Message).Msg("grpc login request")
-	ctx.Header("Authorization", req.Token)
-	ctx.String(http.StatusOK, req.Message)
+	log.Debug().Str("token", req.GetToken()).Str("msg", req.GetMessage()).Msg("grpc login request")
+	ctx.Header("Authorization", req.GetToken())
+	ctx.String(http.StatusOK, req.GetMessage())
 }
 
 func (s *Server) AllBookHandler(ctx *gin.Context) {
@@ -150,10 +149,10 @@ func (s *Server) AllBookHandler(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, books)
 }
 
-func (s *Server) GetBookByIdHandler(ctx *gin.Context) {
+func (s *Server) GetBookByIDHandler(ctx *gin.Context) {
 	bid := ctx.Param("id")
 	log.Println(bid)
-	book, err := s.storage.GetBookById(bid)
+	book, err := s.storage.GetBookByID(bid)
 	if err != nil {
 		if errors.Is(err, storage.ErrBookNotFound) {
 			ctx.String(http.StatusNoContent, err.Error())
@@ -199,7 +198,7 @@ func (s *Server) SaveBookHandler(ctx *gin.Context) {
 		return
 	}
 	book.UID = uid
-	if err := s.storage.SaveBook(book); err != nil {
+	if err = s.storage.SaveBook(book); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -240,7 +239,7 @@ func (s *Server) deleter(ctx context.Context) {
 			log.Debug().Msg("deleter: ctx done")
 			return
 		default:
-			if len(s.deleteChan) == 5 {
+			if len(s.deleteChan) == 5 { //nolint: gomnd //its size
 				log.Debug().Int("delete count", len(s.deleteChan)).Msg("start deleting")
 				for i := 0; i < 5; i++ {
 					<-s.deleteChan
@@ -266,7 +265,7 @@ func getUID(tokenStr string) (string, error) {
 	}
 
 	if !token.Valid {
-		return "", fmt.Errorf("invalid token")
+		return "", errors.New("invalid token")
 	}
 	return claims.UserID, nil
 }

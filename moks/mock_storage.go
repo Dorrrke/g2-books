@@ -63,7 +63,7 @@ func (mr *MockStorageMockRecorder) DeleteBooks() *gomock.Call {
 }
 
 // GetBookById mocks base method.
-func (m *MockStorage) GetBookById(arg0 string) (models.Book, error) {
+func (m *MockStorage) GetBookByID(arg0 string) (models.Book, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBookById", arg0)
 	ret0, _ := ret[0].(models.Book)
@@ -72,9 +72,9 @@ func (m *MockStorage) GetBookById(arg0 string) (models.Book, error) {
 }
 
 // GetBookById indicates an expected call of GetBookById.
-func (mr *MockStorageMockRecorder) GetBookById(arg0 interface{}) *gomock.Call {
+func (mr *MockStorageMockRecorder) GetBookByID(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBookById", reflect.TypeOf((*MockStorage)(nil).GetBookById), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBookById", reflect.TypeOf((*MockStorage)(nil).GetBookByID), arg0)
 }
 
 // GetBookByUID mocks base method.

@@ -71,13 +71,13 @@ func (r *Repository) GetBooks() ([]models.Book, error) {
 	var books []models.Book
 	for rows.Next() {
 		var book models.Book
-		if err := rows.Scan(&book.BID, &book.Lable, &book.Author, &book.Delete, &book.UID); err != nil {
+		if err = rows.Scan(&book.BID, &book.Lable, &book.Author, &book.Delete, &book.UID); err != nil {
 			return nil, err
 		}
 		books = append(books, book)
 	}
 	if len(books) == 0 {
-		return nil, fmt.Errorf("no books in db")
+		return nil, errors.New("no books in db")
 	}
 	return books, nil
 }
@@ -92,18 +92,18 @@ func (r *Repository) GetBookByUID(uid string) ([]models.Book, error) {
 	var books []models.Book
 	for rows.Next() {
 		var book models.Book
-		if err := rows.Scan(&book.BID, &book.Lable, &book.Author, &book.Delete, &book.UID); err != nil {
+		if err = rows.Scan(&book.BID, &book.Lable, &book.Author, &book.Delete, &book.UID); err != nil {
 			return nil, err
 		}
 		books = append(books, book)
 	}
 	if len(books) == 0 {
-		return nil, fmt.Errorf("no books in db")
+		return nil, errors.New("no books in db")
 	}
 	return books, nil
 }
 
-func (r *Repository) GetBookById(bID string) (models.Book, error) {
+func (r *Repository) GetBookByID(bID string) (models.Book, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
 	defer cancel()
 	row := r.conn.QueryRow(ctx, "SELECT lable, author, delete FROM books WHERE bid = $1", bID)
@@ -135,24 +135,24 @@ func (r *Repository) DeleteBook(bID string) error {
 	log := logger.Get()
 	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
 	defer cancel()
-	tx, err := r.conn.Begin(ctx)
+	transaction, err := r.conn.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		err = tx.Rollback(ctx)
+		err = transaction.Rollback(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("rollback failed")
 		}
 	}()
 
-	if _, err := tx.Prepare(ctx, "update book", "UPDATE books SET delete = true WHERE bid = $1"); err != nil {
+	if _, err = transaction.Prepare(ctx, "update book", "UPDATE books SET delete = true WHERE bid = $1"); err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, "update book", bID); err != nil {
+	if _, err = transaction.Exec(ctx, "update book", bID); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	return transaction.Commit(ctx)
 }
 
 func (r *Repository) DeleteBooks() error {
@@ -168,7 +168,7 @@ func (r *Repository) DeleteBooks() error {
 }
 
 func Migrations(dbAddr, migrationPath string) error {
-	migratePath := fmt.Sprintf("file://%s", migrationPath)
+	migratePath := "file://" + migrationPath
 	m, err := migrate.New(migratePath, dbAddr)
 	if err != nil {
 		return err
