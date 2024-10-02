@@ -7,14 +7,15 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/Dorrrke/g2-books/internal/domain/models"
-	authservicev1 "github.com/Dorrrke/g2-books/internal/go"
-	"github.com/Dorrrke/g2-books/internal/logger"
-	"github.com/Dorrrke/g2-books/internal/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/Dorrrke/g2-books/internal/domain/models"
+	authservicev1 "github.com/Dorrrke/g2-books/internal/go"
+	"github.com/Dorrrke/g2-books/internal/logger"
+	"github.com/Dorrrke/g2-books/internal/storage"
 )
 
 const SecretKey = "VerySecretKey2000"

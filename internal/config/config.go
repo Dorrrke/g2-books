@@ -9,14 +9,14 @@ import (
 
 type Config struct {
 	Host        string
-	DbDsn       string
+	DBDsn       string
 	MigratePath string
 	AuthAddr    string
 	Debug       bool
 }
 
 const (
-	defaultDbDSN       = "postgres://postgres:6406655@localhost:5432/cource_g2?sslmode=disable"
+	defaultDBDSN       = "postgres://postgres:6406655@localhost:5432/cource_g2?sslmode=disable"
 	defaultMigratePath = "migrations"
 	defaultHost        = ":8080"
 	defaultAuthAddr    = "localhost:8081"
@@ -27,7 +27,7 @@ func ReadConfig() Config {
 	var dbDsn string
 	var migratePath string
 	flag.StringVar(&host, "host", defaultHost, "server host")
-	flag.StringVar(&dbDsn, "db", defaultDbDSN, "data base addres")
+	flag.StringVar(&dbDsn, "db", defaultDBDSN, "data base addres")
 	flag.StringVar(&migratePath, "m", defaultMigratePath, "path to migrations")
 	debug := flag.Bool("debug", false, "enable debug logging level")
 	flag.Parse()
@@ -39,7 +39,7 @@ func ReadConfig() Config {
 	if hostEnv != "" && host == defaultHost {
 		host = hostEnv
 	}
-	if dbDsnEnv != "" && dbDsn == defaultDbDSN {
+	if dbDsnEnv != "" && dbDsn == defaultDBDSN {
 		dbDsn = dbDsnEnv
 	}
 	if migratePathEnv != "" && migratePath == defaultMigratePath {
@@ -48,7 +48,7 @@ func ReadConfig() Config {
 	authAddr := cmp.Or(os.Getenv("AUTH_ADDR"), defaultAuthAddr)
 	return Config{
 		Host:        host,
-		DbDsn:       dbDsn,
+		DBDsn:       dbDsn,
 		MigratePath: migratePath,
 		AuthAddr:    authAddr,
 		Debug:       *debug,

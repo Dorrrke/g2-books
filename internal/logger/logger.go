@@ -8,15 +8,15 @@ import (
 	"github.com/rs/zerolog"
 )
 
-var once sync.Once
+var once sync.Once //nolint: gochecknoglobals //its singletone
 
-var log zerolog.Logger
+var log zerolog.Logger //nolint: gochecknoglobals //its singletone
 
 func Get(flags ...bool) zerolog.Logger {
 	once.Do(func() {
 		zerolog.TimestampFieldName = "Time"
 		zerolog.LevelFieldName = "Level"
-		zerolog.CallerMarshalFunc = func(pc uintptr, file string, line int) string {
+		zerolog.CallerMarshalFunc = func(_ uintptr, file string, line int) string {
 			short := file
 			for i := len(file) - 1; i > 0; i-- {
 				if file[i] == '/' {
@@ -28,8 +28,13 @@ func Get(flags ...bool) zerolog.Logger {
 			return file + ":" + strconv.Itoa(line)
 		}
 		if flags[0] {
-			log = zerolog.New(os.Stdout).Level(zerolog.DebugLevel).With().Timestamp().Caller().Logger().Output(zerolog.ConsoleWriter{Out: os.Stderr})
-
+			log = zerolog.New(os.Stdout).
+				Level(zerolog.DebugLevel).
+				With().
+				Timestamp().
+				Caller().
+				Logger().
+				Output(zerolog.ConsoleWriter{Out: os.Stderr})
 		} else {
 			log = zerolog.New(os.Stdout).Level(zerolog.InfoLevel).With().Timestamp().Caller().Logger()
 		}

@@ -26,7 +26,7 @@ func TestReadConfig(t *testing.T) {
 			want: want{
 				cfg: Config{
 					Host:        "124.123.1.11:8080",
-					DbDsn:       defaultDbDSN,
+					DBDsn:       defaultDBDSN,
 					MigratePath: defaultMigratePath,
 					Debug:       true,
 				},
@@ -43,7 +43,7 @@ func TestReadConfig(t *testing.T) {
 			want: want{
 				cfg: Config{
 					Host:        "1.1.1.1:1111",
-					DbDsn:       "testDsn",
+					DBDsn:       "testDsn",
 					MigratePath: "testMigratePath",
 					Debug:       true,
 				},

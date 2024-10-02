@@ -7,15 +7,16 @@ import (
 	"log"
 	"time"
 
-	errText "github.com/Dorrrke/g2-books/internal/domain/errors"
-	"github.com/Dorrrke/g2-books/internal/domain/models"
-	"github.com/Dorrrke/g2-books/internal/logger"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	errText "github.com/Dorrrke/g2-books/internal/domain/errors"
+	"github.com/Dorrrke/g2-books/internal/domain/models"
+	"github.com/Dorrrke/g2-books/internal/logger"
 )
 
 const ctxTimeout = 2 * time.Second
@@ -39,25 +40,25 @@ func NewRepo(ctx context.Context, dbAddr string) (*Repository, error) {
 func (r *Repository) SaveUser(user models.User) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
 	defer cancel()
-	UID := uuid.New().String()
+	uid := uuid.New().String()
 	_, err := r.conn.Exec(ctx, "INSERT INTO users(uid, name, email, pass) VALUES ($1, $2, $3, $4)",
-		UID, user.Name, user.Email, user.Pass)
+		uid, user.Name, user.Email, user.Pass)
 	if err != nil {
 		return "", err
 	}
-	return UID, nil
+	return uid, nil
 }
 
 func (r *Repository) ValidateUser(user models.User) (string, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
 	defer cancel()
 	row := r.conn.QueryRow(ctx, "SELECT uid, pass FROM users WHERE email = $1", user.Email)
-	var UID string
+	var uid string
 	var pass string
-	if err := row.Scan(&UID, &pass); err != nil {
+	if err := row.Scan(&uid, &pass); err != nil {
 		return "", "", err
 	}
-	return UID, pass, nil
+	return uid, pass, nil
 }
 
 func (r *Repository) GetBooks() ([]models.Book, error) {
@@ -131,13 +132,19 @@ func (r *Repository) SaveBook(book models.Book) error {
 }
 
 func (r *Repository) DeleteBook(bID string) error {
+	log := logger.Get()
 	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
 	defer cancel()
 	tx, err := r.conn.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		err = tx.Rollback(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("rollback failed")
+		}
+	}()
 
 	if _, err := tx.Prepare(ctx, "update book", "UPDATE books SET delete = true WHERE bid = $1"); err != nil {
 		return err

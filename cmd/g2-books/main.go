@@ -8,14 +8,15 @@ import (
 	"os/signal"
 	"syscall"
 
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
 	"github.com/Dorrrke/g2-books/internal/config"
 	authservicev1 "github.com/Dorrrke/g2-books/internal/go"
 	"github.com/Dorrrke/g2-books/internal/logger"
 	"github.com/Dorrrke/g2-books/internal/server"
 	"github.com/Dorrrke/g2-books/internal/storage"
-	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
@@ -31,11 +32,11 @@ func main() {
 		cancel()
 	}()
 	var stor server.Storage
-	stor, err := storage.NewRepo(context.Background(), cfg.DbDsn)
+	stor, err := storage.NewRepo(context.Background(), cfg.DBDsn)
 	if err != nil {
 		log.Fatal().Err(err).Msg("init storage failed")
 	}
-	if err = storage.Migrations(cfg.DbDsn, cfg.MigratePath); err != nil {
+	if err = storage.Migrations(cfg.DBDsn, cfg.MigratePath); err != nil {
 		log.Fatal().Err(err).Msg("migrations failed")
 	}
 	// grpc.Dial("localhost:5050", grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -54,7 +55,7 @@ func main() {
 	group.Go(func() error {
 		defer log.Debug().Msg("server runner - end")
 		log.Info().Msg("server was started")
-		if err := server.Run(gCtx); err != nil {
+		if err = server.Run(gCtx); err != nil {
 			log.Error().Err(err).Msg("server error")
 			return err
 		}
@@ -71,11 +72,11 @@ func main() {
 		return server.ShutdownServer(gCtx)
 	})
 
-	if err := group.Wait(); err != nil {
+	if err = group.Wait(); err != nil {
 		if errors.Is(err, http.ErrServerClosed) {
 			log.Info().Msg("server was stoped")
 		} else {
-			log.Fatal().Err(err).Msg("fatal server stop")
+			log.Error().Err(err).Msg("fatal server stop")
 		}
 	}
 }

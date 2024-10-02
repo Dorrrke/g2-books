@@ -8,15 +8,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Dorrrke/g2-books/internal/domain/models"
-	"github.com/Dorrrke/g2-books/internal/logger"
-	"github.com/Dorrrke/g2-books/internal/storage"
-	mocks "github.com/Dorrrke/g2-books/moks"
 	"github.com/gin-gonic/gin"
 	"github.com/go-resty/resty/v2"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/Dorrrke/g2-books/internal/domain/models"
+	"github.com/Dorrrke/g2-books/internal/logger"
+	"github.com/Dorrrke/g2-books/internal/storage"
+	mocks "github.com/Dorrrke/g2-books/moks"
 )
 
 func TestRegisterHandler(t *testing.T) {

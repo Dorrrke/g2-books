@@ -3,8 +3,9 @@ package storage
 import (
 	"log"
 
-	"github.com/Dorrrke/g2-books/internal/domain/models"
 	"github.com/google/uuid"
+
+	"github.com/Dorrrke/g2-books/internal/domain/models"
 )
 
 type MemStorage struct {
